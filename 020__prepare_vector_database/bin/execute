@@ -4,13 +4,9 @@ set -a
 source ../.env
 set +a
 
-# Get database connection string for pgvector
-STACK_NAME="rds-vector"
-REGION="ap-northeast-1"
-
 echo "Getting database connection string..."
 CONNECTION_STRING=$(aws cloudformation describe-stacks \
-  --region $REGION \
+  --region $AWS_REGION \
   --stack-name $STACK_NAME \
   --query 'Stacks[0].Outputs[?OutputKey==`ConnectionString`].OutputValue' \
   --output text)

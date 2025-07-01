@@ -12,6 +12,15 @@ require 'erb'
 
 Dotenv.load(File.expand_path('../../.env', __dir__))
 
+# Check for query parameter
+if ARGV.empty?
+  puts "Usage: #{$0} \"<your query here>\""
+  puts "Example: #{$0} \"cracks in wall that are not a concern\""
+  exit 1
+end
+
+query = ARGV[0]
+
 def generate_embedding(client:, model_id:, text:)
   return nil if text.nil? || text.empty?
   
@@ -111,7 +120,7 @@ def search(client:, model_id:, embed_model_id:, db:, user_query:, limit: 10, sea
   results
 end
 
-stack_name = 'rds-vector'
+stack_name = ENV['STACK_NAME']
 cfn = Aws::CloudFormation::Client.new
 response = cfn.describe_stacks(stack_name: stack_name)
 stack = response.stacks.first
@@ -125,13 +134,6 @@ model_id = 'apac.amazon.nova-pro-v1:0' # have to use cross-region inference or i
 embed_model_id = 'amazon.titan-embed-text-v2:0'
   
 db = PG.connect(database_url)
-
-#query = "severe structural cracks in concrete walls"
-#query = "building defects requiring immediate action"
-#query = "roof problems with water damage"
-#query = "moderate spalling on urban structures"
-#query = "all safety concerns in buildings"
-query = "cracks in wall that are not a concern"
 
 results = search(
   client: client,

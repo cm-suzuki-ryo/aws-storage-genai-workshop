@@ -65,7 +65,14 @@ Resources:
                 Resource: "*"
                 Condition:
                   StringEquals:
-                    aws:RequestedRegion: ap-northeast-1
+                    # Due to cross-region endpoint we need all possible requested regions
+                    aws:RequestedRegion: 
+                      - ap-south-1
+                      - ap-northeast-1
+                      - ap-northeast-2
+                      - ap-northeast-3
+                      - ap-southeast-1
+                      - ap-southeast-2
               - Effect: Allow
                 Action: s3:ListBucket
                 Resource: !GetAtt Bucket.Arn
