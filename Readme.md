@@ -1,10 +1,10 @@
 # AWS GenAI Storage Workshop
 
-## Prerequisites 
+## Prerequisites 事前準備
 - AWS Account
 - GitHub Account
 
-## Table of Contents
+## Table of Contents 目次
 
 - [Overview 概要](#overview)
 - [Setup セットアップ](#setup)
@@ -22,6 +22,10 @@ An engineering firm needs to audit and track public infrastructure for safety vi
 As a Cloud Engineer you have been tasked to building a proof-of-concept where you can use GenAI to use natural language to retrieve an image from the archive.
 
 You need to report back possible technical paths and technical considerations for this project.
+
+エンジニアリング会社は、ドローンの空撮映像を通じて公共インフラの安全性を監査・追跡する必要があります。彼らは数万枚の画像（例：橋のひび割れ）を撮影し、年月別のアーカイブに保存しています。
+クラウドエンジニアとして、あなたはGenAIを使用して自然言語でアーカイブから画像を検索できる概念実証を構築する任務を与えられました。
+このプロジェクトの技術的な道筋と技術的考慮事項を報告する必要があります。
 
 ![](./docs/assets/image-example.jpg)
 
@@ -46,19 +50,28 @@ You need to report back possible technical paths and technical considerations fo
 - Can we deploy pgvector database via container on a t3.micro?
 - Can we get Amazon Nova to generate our query to our vector database and return the results?
 
+---
+
+- S3ファイルから特定のバイトを抽出して読み取ることはできますか？
+- Amazon Novaを使用してデータセットを多様化するためのモック画像を生成することはできますか？
+- Amazon Novaを使用して構造化されたJSON出力で画像に注釈を付けることはできますか？
+- S3のzipアーカイブから特定の画像ファイルを抽出することはできますか（アーカイブをダウンロードする必要なく）？
+- Nova Titansを使用してベクター検索データベース用の埋め込みを作成することはできますか？
+- t3.microでコンテナ経由でpgvectorデータベースをデプロイすることはできますか？
+- Amazon Novaにベクターデータベースへのクエリを生成させて結果を返すことはできますか？
 
 ## Technical Diagram
 
-![](./assets/diagram.png)
+![](./docs/assets/diagram.png)
 
 
 ## Public Dataset
 
 We are using the CUBIT Infrastructure Defect Detection Dataset
 
-https://github.com/BenyunZhao/CUBIT
+CUBIT インフラ欠陥検出データセットを使用しています
 
-# Setup
+https://github.com/BenyunZhao/CUBIT
 
 # Setup
 
