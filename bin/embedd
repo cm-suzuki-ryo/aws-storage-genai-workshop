@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-ENV['BUNDLE_GEMFILE'] ||= File.expand_path('../../Gemfile', __dir__)
+ENV['BUNDLE_GEMFILE'] ||= File.expand_path('../Gemfile', __dir__)
 require 'bundler/setup'
 Bundler.require(:default)
 
@@ -7,7 +7,7 @@ require 'aws-sdk-bedrockruntime'
 require 'json'
 require 'dotenv'
 
-Dotenv.load(File.expand_path('../../.env', __dir__))
+Dotenv.load(File.expand_path('../.env', __dir__))
 
 def generate_embedding(client:, model_id:, text:)
   return nil if text.nil? || text.empty?
@@ -139,7 +139,7 @@ def embedd(client,model_id,json_file,output_file)
 end
 
 json_file   = File.expand_path('../outputs/annotate.json', __dir__)
-output_file = File.expand_path("../../020__prepare_vector_database/sql/insert-#{Time.now.to_i}.sql", __dir__)
+output_file = File.expand_path("../sql/insert-#{Time.now.to_i}.sql", __dir__)
 client = Aws::BedrockRuntime::Client.new region: ENV['AWS_REGION']
 model_id = 'amazon.titan-embed-text-v2:0'
 
