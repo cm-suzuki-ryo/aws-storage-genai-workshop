@@ -350,5 +350,7 @@ Example queries:
 ./bin/agent "moderate spalling on urban structures"
 ./bin/agent "all safety concerns in buildings"
 ```
+# Cleanup
 
-
+- Empty S3 Bucket
+- Delete Stack
