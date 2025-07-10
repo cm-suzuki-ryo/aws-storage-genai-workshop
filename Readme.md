@@ -139,7 +139,7 @@ Please click this button to deploy:
 <img  width="200px" src="./docs/assets/launch_stack_user.png"/>
 </a>
 
-1. Write the name for the stack `GenAIStorageStack`
+1. Write the name for the stack スタック名: `GenAIStorageStack`
 2. Paste in the SubnetIds from the previous step
 3. Set the database password `Testing123!`
 4. Enable extra permissions
