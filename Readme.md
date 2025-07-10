@@ -135,6 +135,10 @@ Lets deploy the following AWS Infrastructure:
 
 Please click this button to deploy:
 
+<a target="_blank" href="https://console.aws.amazon.com/cloudformation/home?region=ap-northeast-1#/stacks/create/review?templateURL=https://storage-genai-workshop.s3.ap-northeast-1.amazonaws.com/setup.yaml">
+<img  width="200px" src="./docs/assets/launch_stack_user.png"/>
+</a>
+
 1. Write the name for the stack `GenAIStorageStack`
 2. Paste in the SubnetIds from the previous step
 3. Set the database password `Testing123!`
@@ -150,9 +154,7 @@ Please click this button to deploy:
 
 <img src="./docs/assets/cfn_deployed.png" width="600px"></img>
 
-<a target="_blank" href="https://console.aws.amazon.com/cloudformation/home?region=ap-northeast-1#/stacks/create/review?templateURL=https://storage-genai-workshop.s3.ap-northeast-1.amazonaws.com/setup.yaml">
-<img  width="200px" src="./docs/assets/launch_stack_user.png"/>
-</a>
+
 
 ## Prepare GitHub CodeSpaces Environment
 
