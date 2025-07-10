@@ -82,7 +82,7 @@ https://github.com/BenyunZhao/CUBIT
 1. Drop down the region changer
 2. Change your region your to `東京 ap-northeast-1`
 
-<img src="./assets/change_region.png" width="600px"></img>
+<img src="./docs/assets/change_region.png" width="600px"></img>
 
 1. In the search bar type `bedrock`
 2. Click on Amazon Bedrock to go to this service.
