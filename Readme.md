@@ -23,7 +23,7 @@ As a Cloud Engineer you have been tasked to building a proof-of-concept where yo
 
 You need to report back possible technical paths and technical considerations for this project.
 
-![](./assets/image-example.jpg)
+![](./docs/assets/image-example.jpg)
 
 ## Considertions and Requirements
 
