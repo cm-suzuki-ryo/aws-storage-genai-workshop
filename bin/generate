@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-ENV['BUNDLE_GEMFILE'] ||= File.expand_path('../../Gemfile', __dir__)
+ENV['BUNDLE_GEMFILE'] ||= File.expand_path('../Gemfile', __dir__)
 require 'bundler/setup'
 Bundler.require(:default)
 
@@ -11,7 +11,7 @@ require 'dotenv'
 # This will generate out images using Amazon Nova
 
 # .envファイルから環境変数を読み込み
-Dotenv.load(File.expand_path('../../.env', __dir__))
+Dotenv.load(File.expand_path('../.env', __dir__))
 
 def generate_image(prompt, filename)
   puts "Generating... #{filename}"
