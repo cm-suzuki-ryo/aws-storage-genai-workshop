@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 set -a
-source ../.env
+source ./.env
 set +a
 
 # ひらがな文字 = 3バイト

@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-ENV['BUNDLE_GEMFILE'] ||= File.expand_path('../../Gemfile', __dir__)
+ENV['BUNDLE_GEMFILE'] ||= File.expand_path('../Gemfile', __dir__)
 require 'bundler/setup'
 Bundler.require(:default)
 
@@ -7,7 +7,7 @@ require 'aws-sdk-s3'
 require 'zip'
 require 'dotenv'
 
-Dotenv.load(File.expand_path('../../.env', __dir__))
+Dotenv.load(File.expand_path('../.env', __dir__))
 
 archive_path = File.expand_path("../outputs/#{ENV['AWS_FILE_KEY']}", __dir__)
 inventory_filename = "#{File.basename(ENV['AWS_FILE_KEY'], '.zip')}_inventory.json"
