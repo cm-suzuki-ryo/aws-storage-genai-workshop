@@ -60,7 +60,7 @@
 - ✅ EC2 t3.smallでpgvectorデータベースをデプロイすることはできますか？
 - ✅ Amazon Novaにベクターデータベースへのクエリを生成させて結果を返すことはできますか？
 
-## 技術図
+## アーキテクチャ図
 
 ![](./docs/assets/diagram.png)
 
@@ -132,7 +132,7 @@ aws cloudformation create-stack \
 4. スタック名を設定: `GenAIStorageStackEC2`
 5. パラメーター設定はデフォルト値のまま（パスワード: `Testing123!`）
 6. IAM機能を有効化
-7. スタックを作成（10-15分待機）
+7. スタックを作成（10分前後待機）
 
 <img src="./docs/assets/cfn_deploy.png" width="600px"></img>
 
