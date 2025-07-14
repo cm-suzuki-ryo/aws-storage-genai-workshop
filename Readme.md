@@ -120,7 +120,6 @@ CloudFormationを使用して以下のAWSインフラをデプロイします：
 aws cloudformation create-stack \
   --stack-name GenAIStorageStackEC2 \
   --template-body file://cfn/setup.yaml \
-  --parameters ParameterKey=MasterUserPassword,ParameterValue=Testing123! \
   --capabilities CAPABILITY_IAM \
   --region ap-northeast-1
 ```
@@ -131,7 +130,7 @@ aws cloudformation create-stack \
 2. 「スタックの作成」→「新しいリソースを使用」をクリック
 3. テンプレートファイルをアップロード: `cfn/setup.yaml`
 4. スタック名を設定: `GenAIStorageStackEC2`
-5. データベースパスワードを設定: `Testing123!`
+5. パラメーター設定はデフォルト値のまま（パスワード: `Testing123!`）
 6. IAM機能を有効化
 7. スタックを作成（10-15分待機）
 
@@ -154,11 +153,28 @@ aws ssm start-session --target i-xxxxxxxxx --region ap-northeast-1
 
 ### セットアップの確認
 
-EC2インスタンスに接続後：
+EC2インスタンスに接続後、ワークショップの準備完了状況を確認：
 
 ```bash
-# セットアップ完了確認
-cat /home/ec2-user/setup_complete.txt
+# ワークショップディレクトリに移動
+cd /home/ec2-user/aws-storage-genai-workshop
+
+# 🎉 準備完了状況を一目で確認
+cat WORKSHOP_READY.txt
+```
+
+**WORKSHOP_READY.txt** ファイルには以下の情報が含まれます：
+- ✅ セットアップ完了時刻と所要時間
+- 📋 環境情報（S3バケット名、アカウントID、リージョン等）
+- ✅ 各コンポーネントの準備状況
+- 🚀 次のステップの案内
+- 🔧 トラブルシューティングコマンド
+
+### 追加の確認コマンド（オプション）
+
+```bash
+# 簡単な完了確認
+cat ~/setup_complete.txt
 
 # AWS設定テスト
 /home/ec2-user/test_aws_config.sh
@@ -166,8 +182,7 @@ cat /home/ec2-user/setup_complete.txt
 # データベース状態確認
 /home/ec2-user/db_status.sh
 
-# ワークショップディレクトリに移動
-cd /home/ec2-user/aws-storage-genai-workshop
+# ディレクトリ内容確認
 ls -la
 ```
 
@@ -195,6 +210,12 @@ AWS_FILE_KEY=images.zip
 - すべてのbinスクリプトがローカルデータベース接続用に更新
 
 🎉  **セットアップ完了** 🎉 
+
+**準備完了の確認方法:**
+```bash
+cd /home/ec2-user/aws-storage-genai-workshop
+cat WORKSHOP_READY.txt
+``` 
 
 # S3 Range テスト
 
@@ -340,12 +361,12 @@ Converse APIとAmazon Nova Proを使用して、
 
 クエリの例：
 ```sh
-./bin/agent "懸念のない壁のひび割れ"
-./bin/agent "コンクリート壁の深刻な構造的ひび割れ"
-./bin/agent "即座の対応が必要な建物の欠陥"
-./bin/agent "水害のある屋根の問題"
-./bin/agent "都市構造物の中程度の剥離"
-./bin/agent "建物のすべての安全上の懸念"
+./bin/agent "cracks in wall that are not a concern"
+./bin/agent "severe structural cracks in concrete walls"
+./bin/agent "building defects requiring immediate action"
+./bin/agent "roof problems with water damage"
+./bin/agent "moderate spalling on urban structures"
+./bin/agent "all safety concerns in buildings"
 ```
 
 # トラブルシューティング
@@ -353,7 +374,10 @@ Converse APIとAmazon Nova Proを使用して、
 ## セットアップ状態の確認
 
 ```bash
-# セットアップ完了の確認
+# 🎉 ワークショップ準備完了状況を詳細確認
+cat /home/ec2-user/aws-storage-genai-workshop/WORKSHOP_READY.txt
+
+# セットアップ完了の簡単確認
 cat /home/ec2-user/setup_complete.txt
 
 # AWS設定のテスト

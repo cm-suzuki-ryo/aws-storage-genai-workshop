@@ -130,6 +130,9 @@ Resources:
           Fn::Base64: !Sub |
             #!/bin/bash
             
+            # Record start time for duration calculation
+            START_TIME=$(date +%s)
+            
             # Enable logging for debugging
             exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
             echo "Starting UserData execution at $(date)"
@@ -405,27 +408,54 @@ Resources:
             chmod +x /home/ec2-user/test_aws_config.sh
             chown ec2-user:ec2-user /home/ec2-user/test_aws_config.sh
             
-            # Create setup completion marker with all relevant info
+            # Create workshop ready marker in the workshop directory
+            cat > /home/ec2-user/aws-storage-genai-workshop/WORKSHOP_READY.txt << EOF
+            ========================================
+            🎉 AWS GenAI Storage Workshop Ready! 🎉
+            ========================================
+            
+            Setup completed at: $(date)
+            Setup duration: $(($(date +%s) - START_TIME)) seconds
+            
+            📋 Environment Information:
+            - S3 Bucket Name: $BUCKET_NAME
+            - Account ID: $ACCOUNT_ID
+            - Region: $REGION
+            - Database: PostgreSQL 15 with pgvector extension
+            - Ruby Environment: Ready with all gems installed
+            
+            📁 Workshop Directory: /home/ec2-user/aws-storage-genai-workshop
+            🔗 GitHub Repository: https://github.com/cm-suzuki-ryo/aws-storage-genai-workshop
+            
+            ✅ Components Status:
+            - PostgreSQL Database: READY
+            - pgvector Extension: INSTALLED
+            - AWS CLI Configuration: CONFIGURED
+            - Ruby Environment: READY
+            - Workshop Repository: CLONED
+            - Environment Variables: SET
+            
+            🚀 Next Steps:
+            1. Upload test file: ./bin/upload_file
+            2. Test S3 range reading: ./bin/read_range
+            3. Generate mock images: ./bin/generate
+            4. Follow the workshop guide in README.md
+            
+            🔧 Troubleshooting Commands:
+            - Test AWS config: /home/ec2-user/test_aws_config.sh
+            - Check database: /home/ec2-user/db_status.sh
+            - View setup logs: sudo cat /var/log/user-data.log
+            
+            Happy learning! 🎓
+            EOF
+            chown ec2-user:ec2-user /home/ec2-user/aws-storage-genai-workshop/WORKSHOP_READY.txt
+            
+            # Also create a simple status file in home directory for backward compatibility
             cat > /home/ec2-user/setup_complete.txt << EOF
             Setup completed at $(date)
-            S3 Bucket Name: $BUCKET_NAME
-            Account ID: $ACCOUNT_ID
-            Region: $REGION
-            GitHub Repository: https://github.com/cm-suzuki-ryo/aws-storage-genai-workshop
-            Workshop Directory: /home/ec2-user/aws-storage-genai-workshop
-            Database: PostgreSQL with pgvector extension
-            Ruby Environment: Installed with bundler and gems
-            AWS Region Configuration: Completed
-            Git Clone Status: SUCCESS
-            Launch Template: ${AWS::StackName}-PostgreSQL-LaunchTemplate
-            
-            Environment Variables Set:
-            - AWS_REGION=$REGION
-            - AWS_DEFAULT_REGION=$REGION
-            
-            Test Commands:
-            - ./test_aws_config.sh (AWS configuration test)
-            - ./db_status.sh (Database status check)
+            Workshop directory: /home/ec2-user/aws-storage-genai-workshop
+            Status: READY
+            Check WORKSHOP_READY.txt in the workshop directory for details.
             EOF
             chown ec2-user:ec2-user /home/ec2-user/setup_complete.txt
             
