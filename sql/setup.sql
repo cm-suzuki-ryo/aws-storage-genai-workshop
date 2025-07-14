@@ -1,6 +1,6 @@
-CREATE EXTENSION vector;
+CREATE EXTENSION IF NOT EXISTS vector;
 
-CREATE TABLE infrastructure_images (
+CREATE TABLE IF NOT EXISTS infrastructure_images (
   id SERIAL PRIMARY KEY,
   
   -- File identification

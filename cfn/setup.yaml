@@ -237,9 +237,9 @@ Resources:
             
             cd /home/ec2-user/aws-storage-genai-workshop
             
-            # Install PostgreSQL 15
+            # Install PostgreSQL 15 and development packages
             echo "Installing PostgreSQL..."
-            dnf install -y postgresql15-server postgresql15-contrib postgresql15-devel
+            dnf install -y postgresql15-server postgresql15-contrib postgresql15-devel postgresql15-server-devel
             
             # Initialize PostgreSQL
             postgresql-setup --initdb
@@ -254,21 +254,35 @@ Resources:
             
             # Install pgvector extension
             echo "Installing pgvector..."
-            dnf install -y gcc make
-            sudo -u postgres git clone https://github.com/pgvector/pgvector.git /tmp/pgvector
-            cd /tmp/pgvector
-            make
-            make install
+            dnf install -y gcc make git
             
-            # Enable pgvector extension
-            sudo -u postgres psql -d ${DBName} -c "CREATE EXTENSION vector;"
+            # Clone and install pgvector
+            cd /tmp
+            rm -rf pgvector
+            git clone https://github.com/pgvector/pgvector.git
+            cd pgvector
             
-            # Configure PostgreSQL for external connections
+            # Use pg_server_config (Amazon Linux 2023 equivalent of pg_config)
+            make PG_CONFIG=/usr/bin/pg_server_config
+            make install PG_CONFIG=/usr/bin/pg_server_config
+            
+            # Configure PostgreSQL for external connections and fix authentication
             sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" /var/lib/pgsql/data/postgresql.conf
-            echo "host all all 0.0.0.0/0 md5" >> /var/lib/pgsql/data/pg_hba.conf
+            
+            # Fix pg_hba.conf authentication settings
+            # Replace ident authentication with md5 for TCP connections
+            sed -i 's/host    all             all             127.0.0.1\/32            ident/host    all             all             127.0.0.1\/32            md5/' /var/lib/pgsql/data/pg_hba.conf
+            sed -i 's/host    all             all             ::1\/128                 ident/host    all             all             ::1\/128                 md5/' /var/lib/pgsql/data/pg_hba.conf
+            
+            # Add additional host entries for localhost
+            echo "host    all             all             localhost               md5" >> /var/lib/pgsql/data/pg_hba.conf
+            echo "host    all             all             0.0.0.0/0               md5" >> /var/lib/pgsql/data/pg_hba.conf
             
             # Restart PostgreSQL to apply configuration changes
             systemctl restart postgresql
+            
+            # Enable pgvector extension
+            sudo -u postgres psql -d ${DBName} -c "CREATE EXTENSION IF NOT EXISTS vector;"
             
             # Install Ruby and development tools
             echo "Installing Ruby environment..."
