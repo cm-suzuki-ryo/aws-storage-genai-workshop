@@ -14,7 +14,7 @@ Parameters:
   
   MasterUserPassword:
     Type: String
-    NoEcho: true
+    Default: 'Testing123!'
     MinLength: 8
     Description: 'Master password for the database (min 8 characters)'
 
@@ -142,15 +142,43 @@ Resources:
             echo "Installing git..."
             dnf install -y git
             
-            # Get AWS account ID and region from metadata
+            # Get AWS account ID and region from metadata with better error handling
             echo "Getting AWS metadata..."
-            ACCOUNT_ID=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | grep accountId | cut -d'"' -f4)
-            REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | grep region | cut -d'"' -f4)
-            BUCKET_NAME="aws-storage-genai-workshop-$ACCOUNT_ID-$REGION"
+            INSTANCE_DOCUMENT=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document)
+            echo "Instance document: $INSTANCE_DOCUMENT"
             
-            echo "Account ID: $ACCOUNT_ID"
-            echo "Region: $REGION"
-            echo "Bucket Name: $BUCKET_NAME"
+            # Use Python for reliable JSON parsing
+            ACCOUNT_ID=$(echo "$INSTANCE_DOCUMENT" | python3 -c "import sys, json; print(json.load(sys.stdin)['accountId'])" 2>/dev/null)
+            REGION=$(echo "$INSTANCE_DOCUMENT" | python3 -c "import sys, json; print(json.load(sys.stdin)['region'])" 2>/dev/null)
+            
+            # Fallback methods if primary fails
+            if [ -z "$ACCOUNT_ID" ]; then
+                echo "Fallback: Getting Account ID via AWS CLI..."
+                ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null)
+            fi
+            
+            if [ -z "$REGION" ]; then
+                echo "Fallback: Getting Region via metadata..."
+                REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null)
+            fi
+            
+            # Final fallback to known region
+            if [ -z "$REGION" ]; then
+                REGION="ap-northeast-1"
+                echo "Using default region: $REGION"
+            fi
+            
+            echo "Account ID: '$ACCOUNT_ID'"
+            echo "Region: '$REGION'"
+            
+            # Validate values
+            if [ -z "$ACCOUNT_ID" ]; then
+                echo "ERROR: Could not determine Account ID"
+                exit 1
+            fi
+            
+            BUCKET_NAME="aws-storage-genai-workshop-$ACCOUNT_ID-$REGION"
+            echo "Bucket Name: '$BUCKET_NAME'"
             
             # Set AWS region environment variables globally
             echo "Setting AWS region environment variables..."

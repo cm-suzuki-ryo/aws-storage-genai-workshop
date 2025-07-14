@@ -20,8 +20,10 @@ set +a
 BYTE_START=15
 BYTE_END=21
 
+# Download range and pipe to standard output
+echo "Content from bytes $BYTE_START-$BYTE_END:"
 aws s3api get-object \
 --bucket $AWS_BUCKET_NAME \
 --key hello_world.txt \
 --range bytes=$BYTE_START-$BYTE_END \
-/dev/stdout
+- | cat

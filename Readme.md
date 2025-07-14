@@ -1,70 +1,56 @@
 # AWS GenAI Storage Workshop
 
-## Prerequisites 事前準備
-- AWS Account
-- Session Manager access (no SSH keys required)
+## 事前準備
+- AWSアカウント
+- Session Managerアクセス（SSH鍵は不要）
 
-## Table of Contents 目次
+## 目次
 
-- [Overview 概要](#overview)
-- [Setup セットアップ](#setup)
-- [Test S3 Range](#test-s3-range)
-- [Prepare Dataset データセット準備](#prepare-dataset)
-- [Prepare Vector Database](#prepare-vector-database)
-- [Agent Search](#agent-search)
-- [Cleanup](#cleanup)
+- [概要](#概要)
+- [セットアップ](#セットアップ)
+- [S3 Range テスト](#s3-range-テスト)
+- [データセット準備](#データセット準備)
+- [ベクターデータベース準備](#ベクターデータベース準備)
+- [エージェント検索](#エージェント検索)
+- [クリーンアップ](#クリーンアップ)
 
-# Overview
+# 概要
 
-## Business Use-Case
-
-An engineering firm needs to audit and track public infrastructure for safety via drone arial footage. They have captured tens of thousands of images (eg. cracks in bridges) and have stored them within archives based on year and month.
-
-As a Cloud Engineer you have been tasked to building a proof-of-concept where you can use GenAI to use natural language to retrieve an image from the archive.
-
-You need to report back possible technical paths and technical considerations for this project.
+## ビジネスユースケース
 
 エンジニアリング会社は、ドローンの空撮映像を通じて公共インフラの安全性を監査・追跡する必要があります。彼らは数万枚の画像（例：橋のひび割れ）を撮影し、年月別のアーカイブに保存しています。
+
 クラウドエンジニアとして、あなたはGenAIを使用して自然言語でアーカイブから画像を検索できる概念実証を構築する任務を与えられました。
+
 このプロジェクトの技術的な道筋と技術的考慮事項を報告する必要があります。
 
 ![](./docs/assets/image-example.jpg)
 
-## Architecture Changes アーキテクチャの変更
+## アーキテクチャの変更
 
-**Previous Architecture (旧アーキテクチャ):**
-- RDS PostgreSQL instance
-- IAM User with Access Keys
-- Manual environment setup
+**旧アーキテクチャ:**
+- RDS PostgreSQLインスタンス
+- アクセスキーを使用するIAMユーザー
+- 手動環境セットアップ
 
-**New Architecture (新アーキテクチャ):**
-- **EC2 t3.small** with self-hosted PostgreSQL + pgvector
-- **IAM Role-based authentication** (no access keys)
-- **Automated setup** via CloudFormation UserData
-- **Fixed S3 bucket naming**: `aws-storage-genai-workshop-<AccountID>-<Region>`
-- **Automatic GitHub repository cloning**
-- **Session Manager access** (no SSH keys required)
+**新アーキテクチャ:**
+- **EC2 t3.small** 上の自己ホスト型PostgreSQL + pgvector
+- **IAMロールベース認証**（アクセスキー不要）
+- **CloudFormation UserDataによる自動セットアップ**
+- **固定S3バケット命名**: `aws-storage-genai-workshop-<アカウントID>-<リージョン>`
+- **GitHubリポジトリの自動クローン**
+- **Session Managerアクセス**（SSH鍵不要）
 
-## Considerations and Requirements
+## 考慮事項と要件
 
-- All resources will be created in `ap-northeast-1` Asia Pacific (Tokyo)
-- **EC2-based environment** with automated setup instead of Codespaces
-- Cost optimized: EC2 t3.small (~$0.02/hour) instead of RDS
-- **No manual credential management** - uses IAM roles
-- **Automatic AWS region configuration**
-- Repository: [https://github.com/cm-suzuki-ryo/aws-storage-genai-workshop](https://github.com/cm-suzuki-ryo/aws-storage-genai-workshop)
+- すべてのリソースは `ap-northeast-1` アジアパシフィック（東京）に作成
+- **EC2ベース環境** でCodespacesの代わりに自動セットアップ
+- コスト最適化: RDSの代わりにEC2 t3.small（約$0.02/時間）
+- **手動認証情報管理なし** - IAMロールを使用
+- **AWS リージョンの自動設定**
+- リポジトリ: [https://github.com/cm-suzuki-ryo/aws-storage-genai-workshop](https://github.com/cm-suzuki-ryo/aws-storage-genai-workshop)
 
-## Technical Uncertainty
-
-- ✅ Can we extract specific bytes from an S3 file and read them?
-- ✅ Can we use Amazon Nova to generate mock images to vary our dataset?
-- ✅ Can we annotate the images in structure json output using Amazon Nova?
-- ✅ Can we extract a specific image file from a zip archive from s3 (without the need to download archive)
-- ✅ Can we use Nova Titans to create embeddings for our vector search database?
-- ✅ Can we deploy pgvector database on EC2 t3.small?
-- ✅ Can we get Amazon Nova to generate our query to our vector database and return the results?
-
----
+## 技術的検証項目
 
 - ✅ S3ファイルから特定のバイトを抽出して読み取ることはできますか？
 - ✅ Amazon Novaを使用してデータセットを多様化するためのモック画像を生成することはできますか？
@@ -74,69 +60,61 @@ You need to report back possible technical paths and technical considerations fo
 - ✅ EC2 t3.smallでpgvectorデータベースをデプロイすることはできますか？
 - ✅ Amazon Novaにベクターデータベースへのクエリを生成させて結果を返すことはできますか？
 
-## Technical Diagram
+## 技術図
 
 ![](./docs/assets/diagram.png)
 
-## Public Dataset
-
-We are using the CUBIT Infrastructure Defect Detection Dataset
+## パブリックデータセット
 
 CUBIT インフラ欠陥検出データセットを使用しています
 
 https://github.com/BenyunZhao/CUBIT
 
-# Setup
+# セットアップ
 
-## AWS Account Setup
+## AWSアカウントセットアップ
 
-### Enable All Amazon Bedrock Models
+### Amazon Bedrockモデルをすべて有効化
 
-1. Drop down the region changer
-2. Change your region your to `東京 ap-northeast-1`
+1. リージョン変更のドロップダウンをクリック
+2. リージョンを `東京 ap-northeast-1` に変更
 
 <img src="./docs/assets/change_region.png" width="600px"></img>
 
-3. In the search bar type `bedrock`
-4. Click on Amazon Bedrock to go to this service.
+3. 検索バーに `bedrock` と入力
+4. Amazon Bedrockをクリックしてサービスに移動
 
 <img src="./docs/assets/navigate_bedrock.png" width="600px"></img>
 
-5. In the left hand column click on `モデルアクセス`
+5. 左側のカラムで `モデルアクセス` をクリック
 
 <img src="./docs/assets/find_model_access.png" width="600px"></img>
 
-6. Click on `すべてのモデルを有効にする`
+6. `すべてのモデルを有効にする` をクリック
 
 <img src="./docs/assets/start_model_access.png" width="600px"></img>
 
-7. Click on `次へ`
+7. `次へ` をクリック
 
 <img src="./docs/assets/select_models.png" width="600px"></img>
 
-8. Click on `送信`
+8. `送信` をクリック
 
 <img src="./docs/assets/confirm_model.png" width="600px"></img>
 
-9. See that the models `Nova Pro`, `Nova Canvas` are enabled
+9. `Nova Pro`、`Nova Canvas` モデルが有効になっていることを確認
 
 <img src="./docs/assets/see_models.png" width="600px"></img>
 
-### Deploy AWS Infrastructure
+### AWSインフラのデプロイ
 
-Deploy the following AWS Infrastructure using CloudFormation:
-- **EC2 Instance** (t3.small) with PostgreSQL + pgvector
-- **S3 Bucket** with fixed naming convention
-- **IAM Role** with necessary permissions
-- **Automatic environment setup**
-
-**デプロイするAWSインフラ:**
-- **EC2インスタンス** (t3.small) PostgreSQL + pgvector付き
+CloudFormationを使用して以下のAWSインフラをデプロイします：
+- **EC2インスタンス**（t3.small）PostgreSQL + pgvector付き
 - **S3バケット** 固定命名規則付き
 - **IAMロール** 必要な権限付き
 - **自動環境セットアップ**
 
-#### Deploy via AWS CLI
+#### AWS CLIでのデプロイ
 
 ```bash
 aws cloudformation create-stack \
@@ -147,62 +125,62 @@ aws cloudformation create-stack \
   --region ap-northeast-1
 ```
 
-#### Deploy via AWS Console
+#### AWSコンソールでのデプロイ
 
-1. Navigate to CloudFormation in AWS Console
-2. Click "Create stack" → "With new resources"
-3. Upload the template file: `cfn/setup.yaml`
-4. Set stack name: `GenAIStorageStackEC2`
-5. Set database password: `Testing123!`
-6. Enable IAM capabilities
-7. Create stack (wait ~10-15 minutes)
+1. AWSコンソールでCloudFormationに移動
+2. 「スタックの作成」→「新しいリソースを使用」をクリック
+3. テンプレートファイルをアップロード: `cfn/setup.yaml`
+4. スタック名を設定: `GenAIStorageStackEC2`
+5. データベースパスワードを設定: `Testing123!`
+6. IAM機能を有効化
+7. スタックを作成（10-15分待機）
 
 <img src="./docs/assets/cfn_deploy.png" width="600px"></img>
 
-### Access EC2 Instance
+### EC2インスタンスへのアクセス
 
-Once the stack is deployed, access the EC2 instance via Session Manager:
+スタックがデプロイされたら、Session Manager経由でEC2インスタンスにアクセス：
 
 ```bash
-# Get Instance ID from CloudFormation outputs
+# CloudFormation出力からインスタンスIDを取得
 aws cloudformation describe-stacks \
   --stack-name GenAIStorageStackEC2 \
   --query 'Stacks[0].Outputs[?OutputKey==`InstanceId`].OutputValue' \
   --output text
 
-# Connect via Session Manager
+# Session Manager経由で接続
 aws ssm start-session --target i-xxxxxxxxx --region ap-northeast-1
 ```
 
-### Verify Setup
+### セットアップの確認
 
-Once connected to the EC2 instance:
+EC2インスタンスに接続後：
 
 ```bash
-# Check setup completion
+# セットアップ完了確認
 cat /home/ec2-user/setup_complete.txt
 
-# Test AWS configuration
+# AWS設定テスト
 /home/ec2-user/test_aws_config.sh
 
-# Check database status
+# データベース状態確認
 /home/ec2-user/db_status.sh
 
-# Navigate to workshop directory
+# ワークショップディレクトリに移動
 cd /home/ec2-user/aws-storage-genai-workshop
 ls -la
 ```
 
-## Environment Configuration
+## 環境設定
 
-The environment is automatically configured during EC2 launch:
+環境はEC2起動時に自動設定されます：
 
-### S3 Bucket Naming
-- **Format**: `aws-storage-genai-workshop-<AccountID>-<Region>`
-- **Example**: `aws-storage-genai-workshop-123456789012-ap-northeast-1`
+### S3バケット命名
+- **形式**: `aws-storage-genai-workshop-<アカウントID>-<リージョン>`
+- **例**: `aws-storage-genai-workshop-123456789012-ap-northeast-1`
 
-### Environment Variables (.env)
-Automatically created with correct values:
+### 環境変数（.env）
+正しい値で自動作成されます：
 ```bash
 STACK_NAME=GenAIStorageStackEC2
 AWS_REGION=ap-northeast-1
@@ -211,33 +189,33 @@ DATABASE_URL=postgresql://postgres:Testing123!@localhost:5432/vectordb
 AWS_FILE_KEY=images.zip
 ```
 
-### Ruby Environment
-- Ruby, bundler, and all gems automatically installed
-- PostgreSQL client (psql) pre-installed
-- All bin scripts updated for local database connection
+### Ruby環境
+- Ruby、bundler、すべてのgemが自動インストール
+- PostgreSQLクライアント（psql）がプリインストール
+- すべてのbinスクリプトがローカルデータベース接続用に更新
 
-🎉  **Setup Complete セットアップ完了** 🎉 
+🎉  **セットアップ完了** 🎉 
 
-# Test S3 Range
+# S3 Range テスト
 
-## Technical Uncertainty
+## 技術的検証
 
-We want to determine if we can read part of a file without downloading the entire file.
-Amazon S3 suggests you can use a RANGE Http Header to specific the byte range to download.
+ファイル全体をダウンロードせずにファイルの一部を読み取れるかを確認します。
+Amazon S3では、RANGE HTTPヘッダーを使用して特定のバイト範囲をダウンロードできることが示唆されています。
 
-### Upload File
+### ファイルのアップロード
 
-We will upload a file called `hello_world.txt` to our bucket.
+`hello_world.txt` というファイルをバケットにアップロードします。
 
-The contents of this file is `こんにちは世界`.
+このファイルの内容は `こんにちは世界` です。
 
 ```bash
 ./bin/upload_file
 ```
 
-### Read Part Of File
+### ファイルの一部読み取り
 
-We will specify the byte range to only read `世界`.
+バイト範囲を指定して `世界` のみを読み取ります。
 
 ```bash
 ./bin/read_range
@@ -245,103 +223,102 @@ We will specify the byte range to only read `世界`.
 
 <img src="./docs/assets/see_range.png" width="600px"></img>
 
-# Prepare Dataset
+# データセット準備
 
-## Generate Mock Images
+## モック画像の生成
 
-If our dataset has missing image examples we can generate our own to help later test
-the edge cases for our application.
+データセットに不足している画像例がある場合、アプリケーションのエッジケースをテストするために独自の画像を生成できます。
 
-We are using `Amazon Nova Canvas` to generate images.
+`Amazon Nova Canvas` を使用して画像を生成します。
 
 ```sh
 ./bin/generate
 ```
 
-This will output a file to `outputs/images/`
+これにより `outputs/images/` にファイルが出力されます
 
 <img src="./docs/assets/generated_image_1.png" width="600px"></img>
 
-> Example of generated image using the following prompt: The image shows the eaves of a building with visible cracks, spalling, and missing components. The surface appears deteriorated, with signs of water damage and discoloration. The eaves are part of the building's exterior, and the defects are concentrated along the edge where the roof meets the wall.
+> 以下のプロンプトを使用して生成された画像の例：「画像は、目に見えるひび割れ、剥離、欠損部品のある建物の軒を示しています。表面は劣化しており、水害と変色の兆候があります。軒は建物の外装の一部であり、欠陥は屋根と壁が接する端に集中しています。」
 
-## Annotate Images
+## 画像の注釈
 
-We need to generate annotation (metadata) information so we can search our images.
+画像を検索できるように注釈（メタデータ）情報を生成する必要があります。
 
-We are using `Amazon Nova Pro` to analyze the image.
+`Amazon Nova Pro` を使用して画像を分析します。
 
-The challenge is generating structured json output.
-While this implementation of `./bin/annotate` works, there is a chance for 1,000 of runs it might fail and so more work needs to be put to catch edge cases.
+構造化されたJSON出力を生成することが課題です。
+この `./bin/annotate` の実装は機能しますが、1,000回の実行で失敗する可能性があるため、エッジケースをキャッチするためにより多くの作業が必要です。
 
 ```sh
 ./bin/annotate
 ```
 
-Here is an example of annotation output: [annotate.json.example](./outputs/annotate.json.example)
+注釈出力の例はこちら：[annotate.json.example](./outputs/annotate.json.example)
 
-> This will annotate our real images, not the mock ones. If we want to include the mock ones we need to copy them into the input directory
+> これは実際の画像に注釈を付けます（モック画像ではありません）。モック画像を含めたい場合は、入力ディレクトリにコピーする必要があります
 
-## Create Archive, Inventory File and Upload to S3
+## アーカイブ、インベントリファイルの作成とS3へのアップロード
 
-1. Zip our images to an archive
-2. Read the zip file and create an inventory file with byte ranges for exact files
-3. Upload the zip archive to our S3 bucket
+1. 画像をアーカイブにzip
+2. zipファイルを読み取り、正確なファイルのバイト範囲でインベントリファイルを作成
+3. zipアーカイブをS3バケットにアップロード
 
 ```sh
 ./bin/upload
 ```
 
-## Test Downloading Single Image from the Archive
+## アーカイブから単一画像のダウンロードテスト
 
-This script will read the inventory file to get the byte range,
-we will use the byte range to download the image from inside the archive.
+このスクリプトはインベントリファイルを読み取ってバイト範囲を取得し、
+バイト範囲を使用してアーカイブ内から画像をダウンロードします。
 
-We have to decompress the partial data to get to the final file.
+最終ファイルを取得するために部分データを解凍する必要があります。
 
 ```sh
 ./bin/download hk0155.jpg
 ```
 
-## Create Embedding Data
+## 埋め込みデータの作成
 
-We will use an embedding model to convert our annotation data into vector embeddings.
-We'll generate a SQL file to mass import our data into our database.
+埋め込みモデルを使用して注釈データをベクター埋め込みに変換します。
+データベースに一括インポートするためのSQLファイルを生成します。
 
 ```sh
 ./bin/embedd
 ```
 
-# Prepare Vector Database
+# ベクターデータベース準備
 
-## Database Connection
+## データベース接続
 
-The PostgreSQL database is automatically configured and running on the EC2 instance.
-No additional installation is required.
+PostgreSQLデータベースはEC2インスタンス上で自動設定され、実行されています。
+追加のインストールは不要です。
 
-## Load Data into Database 
+## データベースへのデータ読み込み
 
-- We will enable vector extension
-- We will setup our tables
+- ベクター拡張を有効化
+- テーブルをセットアップ
 
 ```sh
 ./bin/execute ./sql/setup.sql
 ```
 
-- We will insert our data into the database
+- データベースにデータを挿入
 
 ```sh
-./bin/execute ./sql/insert-[timestamp].sql
+./bin/execute ./sql/insert-[タイムスタンプ].sql
 ```
-> ⚠️ This file is autogenerated with a timestamp so you'll need to use tab completion or check the actual filename in the sql/ directory
+> ⚠️ このファイルはタイムスタンプ付きで自動生成されるため、タブ補完を使用するか、sql/ディレクトリで実際のファイル名を確認する必要があります
 
-- We will create our indexes
+- インデックスを作成
 
 ```sh
 ./bin/execute ./sql/indexes.sql
 ```
 
-These warnings are due to our low amount of data.
-In our production use-case we need to have indexes.
+これらの警告は、データ量が少ないことが原因です。
+本番環境のユースケースではインデックスが必要です。
 
 ```sh
 psql:sql/indexes.sql:9: NOTICE:  ivfflat index created with little data
@@ -354,108 +331,108 @@ HINT:  Drop the index until the table has more data.
 CREATE INDEX
 ```
 
-# Agent Search
+# エージェント検索
 
-## Agent
+## エージェント
 
-Using the converse API and Amazon Nova Pro we can search against
-our vector database.
+Converse APIとAmazon Nova Proを使用して、
+ベクターデータベースに対して検索を実行できます。
 
-Example queries:
+クエリの例：
 ```sh
-./bin/agent "cracks in wall that are not a concern"
-./bin/agent "severe structural cracks in concrete walls"
-./bin/agent "building defects requiring immediate action"
-./bin/agent "roof problems with water damage"
-./bin/agent "moderate spalling on urban structures"
-./bin/agent "all safety concerns in buildings"
+./bin/agent "懸念のない壁のひび割れ"
+./bin/agent "コンクリート壁の深刻な構造的ひび割れ"
+./bin/agent "即座の対応が必要な建物の欠陥"
+./bin/agent "水害のある屋根の問題"
+./bin/agent "都市構造物の中程度の剥離"
+./bin/agent "建物のすべての安全上の懸念"
 ```
 
-# Troubleshooting
+# トラブルシューティング
 
-## Check Setup Status
+## セットアップ状態の確認
 
 ```bash
-# Verify setup completion
+# セットアップ完了の確認
 cat /home/ec2-user/setup_complete.txt
 
-# Test AWS configuration
+# AWS設定のテスト
 /home/ec2-user/test_aws_config.sh
 
-# Check database status
+# データベース状態の確認
 /home/ec2-user/db_status.sh
 
-# View UserData execution log
+# UserData実行ログの表示
 sudo cat /var/log/user-data.log
 ```
 
-## Common Issues
+## よくある問題
 
-### AWS CLI Region Error
-If you see `aws: error: argument --region: expected one argument`:
-- The environment is automatically configured during setup
-- Check environment variables: `echo $AWS_REGION`
-- Re-source the environment: `source ~/.bashrc`
+### AWS CLIリージョンエラー
+`aws: error: argument --region: expected one argument` が表示される場合：
+- 環境はセットアップ中に自動設定されます
+- 環境変数を確認：`echo $AWS_REGION`
+- 環境を再読み込み：`source ~/.bashrc`
 
-### Database Connection Issues
+### データベース接続の問題
 ```bash
-# Test database connection
+# データベース接続のテスト
 ./bin/connect
 
-# Check PostgreSQL status
+# PostgreSQL状態の確認
 sudo systemctl status postgresql
 ```
 
-### Permission Issues
+### 権限の問題
 ```bash
-# Fix ownership if needed
+# 必要に応じて所有権を修正
 sudo chown -R ec2-user:ec2-user /home/ec2-user/aws-storage-genai-workshop
 ```
 
-# Cleanup
+# クリーンアップ
 
-## Delete Resources
+## リソースの削除
 
-1. **Empty S3 Bucket** (if it contains objects):
+1. **S3バケットを空にする**（オブジェクトが含まれている場合）：
 ```bash
-aws s3 rm s3://aws-storage-genai-workshop-<AccountID>-<Region> --recursive
+aws s3 rm s3://aws-storage-genai-workshop-<アカウントID>-<リージョン> --recursive
 ```
 
-2. **Delete CloudFormation Stack**:
+2. **CloudFormationスタックを削除**：
 ```bash
 aws cloudformation delete-stack --stack-name GenAIStorageStackEC2 --region ap-northeast-1
 ```
 
-Or via AWS Console:
-1. Navigate to CloudFormation
-2. Select the stack `GenAIStorageStackEC2`
-3. Click "Delete"
-4. Confirm deletion
+またはAWSコンソール経由：
+1. CloudFormationに移動
+2. スタック `GenAIStorageStackEC2` を選択
+3. 「削除」をクリック
+4. 削除を確認
 
-## Cost Optimization
+## コスト最適化
 
-- **EC2 t3.small**: ~$0.02/hour (~$0.50/day)
-- **S3 storage**: Minimal cost for workshop data
-- **Total estimated cost**: Under $1 USD for workshop duration
+- **EC2 t3.small**: 約$0.02/時間（約$0.50/日）
+- **S3ストレージ**: ワークショップデータの最小コスト
+- **総推定コスト**: ワークショップ期間中$1未満
 
-Remember to delete resources after completing the workshop to avoid ongoing charges.
+ワークショップ完了後は継続的な課金を避けるためにリソースを削除することを忘れずに。
 
 ---
 
-## Changes Summary 変更点まとめ
+## 変更点まとめ
 
-### Major Changes 主な変更点
+### 主な変更点
 
-1. **RDS → EC2 PostgreSQL**: Cost optimization and full control
-2. **IAM User → IAM Role**: Enhanced security, no credential management
-3. **Manual setup → Automated setup**: CloudFormation UserData handles everything
-4. **Dynamic bucket names → Fixed naming**: Predictable S3 bucket names
-5. **Codespaces → EC2 + Session Manager**: Consistent environment, no SSH keys
+1. **RDS → EC2 PostgreSQL**: コスト最適化と完全制御
+2. **IAMユーザー → IAMロール**: セキュリティ強化、認証情報管理不要
+3. **手動セットアップ → 自動セットアップ**: CloudFormation UserDataがすべてを処理
+4. **動的バケット名 → 固定命名**: 予測可能なS3バケット名
+5. **Codespaces → EC2 + Session Manager**: 一貫した環境、SSH鍵不要
 
-### Benefits メリット
+### メリット
 
-- **Cost Effective**: ~70% cost reduction vs RDS
-- **Secure**: No access keys, IAM role-based authentication
-- **Automated**: Zero manual configuration required
-- **Consistent**: Same environment for all users
-- **Accessible**: Session Manager access from anywhere
+- **コスト効率**: RDSソリューションと比較して約70%のコスト削減
+- **セキュア**: アクセスキー不要、IAMロールベース認証
+- **自動化**: 手動設定作業ゼロ
+- **一貫性**: すべてのユーザーに同じ環境
+- **アクセス可能**: どこからでもSession Managerアクセス
