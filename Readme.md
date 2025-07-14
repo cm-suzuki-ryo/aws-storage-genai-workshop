@@ -2,7 +2,7 @@
 
 ## Prerequisites 事前準備
 - AWS Account
-- GitHub Account
+- Session Manager access (no SSH keys required)
 
 ## Table of Contents 目次
 
@@ -12,6 +12,7 @@
 - [Prepare Dataset データセット準備](#prepare-dataset)
 - [Prepare Vector Database](#prepare-vector-database)
 - [Agent Search](#agent-search)
+- [Cleanup](#cleanup)
 
 # Overview
 
@@ -29,41 +30,53 @@ You need to report back possible technical paths and technical considerations fo
 
 ![](./docs/assets/image-example.jpg)
 
-## Considertions and Requirements
+## Architecture Changes アーキテクチャの変更
+
+**Previous Architecture (旧アーキテクチャ):**
+- RDS PostgreSQL instance
+- IAM User with Access Keys
+- Manual environment setup
+
+**New Architecture (新アーキテクチャ):**
+- **EC2 t3.small** with self-hosted PostgreSQL + pgvector
+- **IAM Role-based authentication** (no access keys)
+- **Automated setup** via CloudFormation UserData
+- **Fixed S3 bucket naming**: `aws-storage-genai-workshop-<AccountID>-<Region>`
+- **Automatic GitHub repository cloning**
+- **Session Manager access** (no SSH keys required)
+
+## Considerations and Requirements
 
 - All resources will be created in `ap-northeast-1` Asia Pacific (Tokyo)
-- We'll be using GitHub Codespaces so we have a consistent developer enviroment 
-- We are not using free-tier services but the cost should be under $1 USD for the duration of the workshop
-- We'll be using the following repo: [https://github.com/ExamProCo/aws-storage-genai-workshop](https://github.com/ExamProCo/aws-storage-genai-workshop)
-- We may need to rebuild the container for AWS CLI to be installed
-
-
-> devcontainers doesn't always work on Codespaces and requires lengthly rebuild and then even still hangs.
+- **EC2-based environment** with automated setup instead of Codespaces
+- Cost optimized: EC2 t3.small (~$0.02/hour) instead of RDS
+- **No manual credential management** - uses IAM roles
+- **Automatic AWS region configuration**
+- Repository: [https://github.com/cm-suzuki-ryo/aws-storage-genai-workshop](https://github.com/cm-suzuki-ryo/aws-storage-genai-workshop)
 
 ## Technical Uncertainty
 
-- Can we extract specific bytes from an S3 file and read them?
-- Can we use Amazon Nova to generate mock images to vary our dataset?
-- Can we annotate the images in structure json output using Amazon Nova?
-- Can we extract a specific image file from a zip archive from s3 (without the need to download archive)
-- Can we use Nova Titans to create embeddings for our vector search database?
-- Can we deploy pgvector database via container on a t3.micro?
-- Can we get Amazon Nova to generate our query to our vector database and return the results?
+- ✅ Can we extract specific bytes from an S3 file and read them?
+- ✅ Can we use Amazon Nova to generate mock images to vary our dataset?
+- ✅ Can we annotate the images in structure json output using Amazon Nova?
+- ✅ Can we extract a specific image file from a zip archive from s3 (without the need to download archive)
+- ✅ Can we use Nova Titans to create embeddings for our vector search database?
+- ✅ Can we deploy pgvector database on EC2 t3.small?
+- ✅ Can we get Amazon Nova to generate our query to our vector database and return the results?
 
 ---
 
-- S3ファイルから特定のバイトを抽出して読み取ることはできますか？
-- Amazon Novaを使用してデータセットを多様化するためのモック画像を生成することはできますか？
-- Amazon Novaを使用して構造化されたJSON出力で画像に注釈を付けることはできますか？
-- S3のzipアーカイブから特定の画像ファイルを抽出することはできますか（アーカイブをダウンロードする必要なく）？
-- Nova Titansを使用してベクター検索データベース用の埋め込みを作成することはできますか？
-- t3.microでコンテナ経由でpgvectorデータベースをデプロイすることはできますか？
-- Amazon Novaにベクターデータベースへのクエリを生成させて結果を返すことはできますか？
+- ✅ S3ファイルから特定のバイトを抽出して読み取ることはできますか？
+- ✅ Amazon Novaを使用してデータセットを多様化するためのモック画像を生成することはできますか？
+- ✅ Amazon Novaを使用して構造化されたJSON出力で画像に注釈を付けることはできますか？
+- ✅ S3のzipアーカイブから特定の画像ファイルを抽出することはできますか（アーカイブをダウンロードする必要なく）？
+- ✅ Nova Titansを使用してベクター検索データベース用の埋め込みを作成することはできますか？
+- ✅ EC2 t3.smallでpgvectorデータベースをデプロイすることはできますか？
+- ✅ Amazon Novaにベクターデータベースへのクエリを生成させて結果を返すことはできますか？
 
 ## Technical Diagram
 
 ![](./docs/assets/diagram.png)
-
 
 ## Public Dataset
 
@@ -84,112 +97,124 @@ https://github.com/BenyunZhao/CUBIT
 
 <img src="./docs/assets/change_region.png" width="600px"></img>
 
-1. In the search bar type `bedrock`
-2. Click on Amazon Bedrock to go to this service.
+3. In the search bar type `bedrock`
+4. Click on Amazon Bedrock to go to this service.
 
 <img src="./docs/assets/navigate_bedrock.png" width="600px"></img>
 
-1. In the left hand column click on `モデルアクセス`
+5. In the left hand column click on `モデルアクセス`
 
 <img src="./docs/assets/find_model_access.png" width="600px"></img>
 
-1. Click on `すべてのモデルを有効にする`
+6. Click on `すべてのモデルを有効にする`
 
 <img src="./docs/assets/start_model_access.png" width="600px"></img>
 
-1. Click on `次へ`
+7. Click on `次へ`
 
 <img src="./docs/assets/select_models.png" width="600px"></img>
 
-
-1. Click on `送信`
+8. Click on `送信`
 
 <img src="./docs/assets/confirm_model.png" width="600px"></img>
 
-1. See that the models `Nova Pro`, `Nova Canvas` are enabled
+9. See that the models `Nova Pro`, `Nova Canvas` are enabled
 
 <img src="./docs/assets/see_models.png" width="600px"></img>
 
+### Deploy AWS Infrastructure
 
-### Setup AWS Infrastructure
+Deploy the following AWS Infrastructure using CloudFormation:
+- **EC2 Instance** (t3.small) with PostgreSQL + pgvector
+- **S3 Bucket** with fixed naming convention
+- **IAM Role** with necessary permissions
+- **Automatic environment setup**
 
-- We need the two subnets from the default VPC.
-- We need to run this command in CloudShell:
+**デプロイするAWSインフラ:**
+- **EC2インスタンス** (t3.small) PostgreSQL + pgvector付き
+- **S3バケット** 固定命名規則付き
+- **IAMロール** 必要な権限付き
+- **自動環境セットアップ**
 
-```sh
-aws ec2 describe-subnets \
---region ap-northeast-1 \
---filters "Name=vpc-id,Values=$(aws ec2 describe-vpcs --region ap-northeast-1 --filters "Name=is-default,Values=true" --query 'Vpcs[0].VpcId' --output text)" --query 'Subnets[0:2].SubnetId' --output text | tr '\t' ','
+#### Deploy via AWS CLI
+
+```bash
+aws cloudformation create-stack \
+  --stack-name GenAIStorageStackEC2 \
+  --template-body file://cfn/setup.yaml \
+  --parameters ParameterKey=MasterUserPassword,ParameterValue=Testing123! \
+  --capabilities CAPABILITY_IAM \
+  --region ap-northeast-1
 ```
 
-1. Open CloudShell
-2. Paste the AWS CLI command from above
-3. Copy the Subnet IDS for the next step
+#### Deploy via AWS Console
 
-<img src="./docs/assets/cloudshell.png" width="600px"></img>
-
-Lets deploy the following AWS Infrastructure:
-- AWS User with AWS Credentials
-- S3 Bucket
-- RDS Instance
-
-Please click this button to deploy:
-
-<a target="_blank" href="https://console.aws.amazon.com/cloudformation/home?region=ap-northeast-1#/stacks/create/review?templateURL=https://storage-genai-workshop.s3.ap-northeast-1.amazonaws.com/setup.yaml">
-<img  width="200px" src="./docs/assets/launch_stack_user.png"/>
-</a>
-
-1. Write the name for the stack スタック名: `GenAIStorageStack`
-2. Paste in the SubnetIds from the previous step
-3. Set the database password `Testing123!`
-4. Enable extra permissions
-5. Create stack (and wait 5 mins)
-
+1. Navigate to CloudFormation in AWS Console
+2. Click "Create stack" → "With new resources"
+3. Upload the template file: `cfn/setup.yaml`
+4. Set stack name: `GenAIStorageStackEC2`
+5. Set database password: `Testing123!`
+6. Enable IAM capabilities
+7. Create stack (wait ~10-15 minutes)
 
 <img src="./docs/assets/cfn_deploy.png" width="600px"></img>
 
-1. Click on outputs
-2. See the outputs, we will use them soon.
+### Access EC2 Instance
 
+Once the stack is deployed, access the EC2 instance via Session Manager:
 
-<img src="./docs/assets/cfn_deployed.png" width="600px"></img>
+```bash
+# Get Instance ID from CloudFormation outputs
+aws cloudformation describe-stacks \
+  --stack-name GenAIStorageStackEC2 \
+  --query 'Stacks[0].Outputs[?OutputKey==`InstanceId`].OutputValue' \
+  --output text
 
-
-
-## Prepare GitHub CodeSpaces Environment
-
-1. Click on `Code`
-2. Click on `Codespaces`
-3. Click on `Create codespace on main`
-
-<img src="./docs/assets/launch_codespaces.png" width="600px"></img>
-
-1. Create copy of `.env.example and name it `.env`
-2. Update `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_BUCKET_NAME` (get the values from the Cloudformation Stack)
-
-<img src="./docs/assets/set_env.png" width="600px"></img>
-
-
-1. Install Ruby Libraries by running `bundle install`
-
-```sh
-cd /workspaces/aws-storage-genai-workshop 
-bundle install
+# Connect via Session Manager
+aws ssm start-session --target i-xxxxxxxxx --region ap-northeast-1
 ```
 
-<img src="./docs/assets/bundle_install.png" width="600px"></img>
+### Verify Setup
 
-> To install nokogiri will takes 1-2 mins
+Once connected to the EC2 instance:
 
-1. Install AWS CLI
+```bash
+# Check setup completion
+cat /home/ec2-user/setup_complete.txt
 
-```sh
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip" && \
-cd /tmp && unzip awscliv2.zip && sudo ./aws/install && \
-rm -rf awscliv2.zip aws/ && cd -
+# Test AWS configuration
+/home/ec2-user/test_aws_config.sh
+
+# Check database status
+/home/ec2-user/db_status.sh
+
+# Navigate to workshop directory
+cd /home/ec2-user/aws-storage-genai-workshop
+ls -la
 ```
 
-<img src="./docs/assets/install_aws_cli.png" width="600px"></img>
+## Environment Configuration
+
+The environment is automatically configured during EC2 launch:
+
+### S3 Bucket Naming
+- **Format**: `aws-storage-genai-workshop-<AccountID>-<Region>`
+- **Example**: `aws-storage-genai-workshop-123456789012-ap-northeast-1`
+
+### Environment Variables (.env)
+Automatically created with correct values:
+```bash
+STACK_NAME=GenAIStorageStackEC2
+AWS_REGION=ap-northeast-1
+AWS_BUCKET_NAME=aws-storage-genai-workshop-123456789012-ap-northeast-1
+DATABASE_URL=postgresql://postgres:Testing123!@localhost:5432/vectordb
+AWS_FILE_KEY=images.zip
+```
+
+### Ruby Environment
+- Ruby, bundler, and all gems automatically installed
+- PostgreSQL client (psql) pre-installed
+- All bin scripts updated for local database connection
 
 🎉  **Setup Complete セットアップ完了** 🎉 
 
@@ -212,7 +237,7 @@ The contents of this file is `こんにちは世界`.
 
 ### Read Part Of File
 
-We will specfic the byte range to only read `世界`.
+We will specify the byte range to only read `世界`.
 
 ```bash
 ./bin/read_range
@@ -233,29 +258,28 @@ We are using `Amazon Nova Canvas` to generate images.
 ./bin/generate
 ```
 
-This will output a file to `010__prepare_dataset/outputs/images/`
+This will output a file to `outputs/images/`
 
 <img src="./docs/assets/generated_image_1.png" width="600px"></img>
 
 > Example of generated image using the following prompt: The image shows the eaves of a building with visible cracks, spalling, and missing components. The surface appears deteriorated, with signs of water damage and discoloration. The eaves are part of the building's exterior, and the defects are concentrated along the edge where the roof meets the wall.
 
-
 ## Annotate Images
 
-We need to generate out annotation (metadata) information so we can search our iamgs.
+We need to generate annotation (metadata) information so we can search our images.
 
-We are using `Amazon Nova Pro` to to analyze the image.
+We are using `Amazon Nova Pro` to analyze the image.
 
-The challenge is generated structured json output.
-While this implementation of `./bin/annotate` works, there is a chance for 1,000 of runs it might fail and so more work need to put to catch edgecases.
+The challenge is generating structured json output.
+While this implementation of `./bin/annotate` works, there is a chance for 1,000 of runs it might fail and so more work needs to be put to catch edge cases.
 
 ```sh
 ./bin/annotate
 ```
 
-Here is a example of annoation output: [annotate.json.example](./outputs/annotate.json.example)
+Here is an example of annotation output: [annotate.json.example](./outputs/annotate.json.example)
 
-> This will annotate our real images, not the mock ones. If we can to include the mock ones we need to copy them into the input directory
+> This will annotate our real images, not the mock ones. If we want to include the mock ones we need to copy them into the input directory
 
 ## Create Archive, Inventory File and Upload to S3
 
@@ -280,8 +304,8 @@ We have to decompress the partial data to get to the final file.
 
 ## Create Embedding Data
 
-We will use an embedding model to convert our annotation data int vector embeddings.
-We'll generate out a SQL file to mass import our data into our database.
+We will use an embedding model to convert our annotation data into vector embeddings.
+We'll generate a SQL file to mass import our data into our database.
 
 ```sh
 ./bin/embedd
@@ -289,16 +313,12 @@ We'll generate out a SQL file to mass import our data into our database.
 
 # Prepare Vector Database
 
-## Install PSQL
+## Database Connection
 
-In order to interact with our Postgres database we will need to install the postgres client
+The PostgreSQL database is automatically configured and running on the EC2 instance.
+No additional installation is required.
 
-```sh
-sudo apt update
-sudo apt install postgresql-client -y
-```
-
-## Load Data into Databaase 
+## Load Data into Database 
 
 - We will enable vector extension
 - We will setup our tables
@@ -307,20 +327,20 @@ sudo apt install postgresql-client -y
 ./bin/execute ./sql/setup.sql
 ```
 
-- We will insert our database
+- We will insert our data into the database
 
 ```sh
-./bin/execute ./sql/insert.sql ⚠️⚠️⚠️⚠️ 生成されたファイルで実際のファイル名を確認してください。
+./bin/execute ./sql/insert-[timestamp].sql
 ```
-> ⚠️ This file is autogenerated with a timestamp so you'll need to autocomplete eg. ./bin/execute ./sql/insert-1751397185.sql 
+> ⚠️ This file is autogenerated with a timestamp so you'll need to use tab completion or check the actual filename in the sql/ directory
 
-- Will will create our indexes
+- We will create our indexes
 
 ```sh
 ./bin/execute ./sql/indexes.sql
 ```
 
-These warnings is due to our low amount of data.
+These warnings are due to our low amount of data.
 In our production use-case we need to have indexes.
 
 ```sh
@@ -338,7 +358,7 @@ CREATE INDEX
 
 ## Agent
 
-Using the converse API and Amazon Bedrock Pro we can search against
+Using the converse API and Amazon Nova Pro we can search against
 our vector database.
 
 Example queries:
@@ -350,7 +370,92 @@ Example queries:
 ./bin/agent "moderate spalling on urban structures"
 ./bin/agent "all safety concerns in buildings"
 ```
+
+# Troubleshooting
+
+## Check Setup Status
+
+```bash
+# Verify setup completion
+cat /home/ec2-user/setup_complete.txt
+
+# Test AWS configuration
+/home/ec2-user/test_aws_config.sh
+
+# Check database status
+/home/ec2-user/db_status.sh
+
+# View UserData execution log
+sudo cat /var/log/user-data.log
+```
+
+## Common Issues
+
+### AWS CLI Region Error
+If you see `aws: error: argument --region: expected one argument`:
+- The environment is automatically configured during setup
+- Check environment variables: `echo $AWS_REGION`
+- Re-source the environment: `source ~/.bashrc`
+
+### Database Connection Issues
+```bash
+# Test database connection
+./bin/connect
+
+# Check PostgreSQL status
+sudo systemctl status postgresql
+```
+
+### Permission Issues
+```bash
+# Fix ownership if needed
+sudo chown -R ec2-user:ec2-user /home/ec2-user/aws-storage-genai-workshop
+```
+
 # Cleanup
 
-- Empty S3 Bucket
-- Delete Stack
+## Delete Resources
+
+1. **Empty S3 Bucket** (if it contains objects):
+```bash
+aws s3 rm s3://aws-storage-genai-workshop-<AccountID>-<Region> --recursive
+```
+
+2. **Delete CloudFormation Stack**:
+```bash
+aws cloudformation delete-stack --stack-name GenAIStorageStackEC2 --region ap-northeast-1
+```
+
+Or via AWS Console:
+1. Navigate to CloudFormation
+2. Select the stack `GenAIStorageStackEC2`
+3. Click "Delete"
+4. Confirm deletion
+
+## Cost Optimization
+
+- **EC2 t3.small**: ~$0.02/hour (~$0.50/day)
+- **S3 storage**: Minimal cost for workshop data
+- **Total estimated cost**: Under $1 USD for workshop duration
+
+Remember to delete resources after completing the workshop to avoid ongoing charges.
+
+---
+
+## Changes Summary 変更点まとめ
+
+### Major Changes 主な変更点
+
+1. **RDS → EC2 PostgreSQL**: Cost optimization and full control
+2. **IAM User → IAM Role**: Enhanced security, no credential management
+3. **Manual setup → Automated setup**: CloudFormation UserData handles everything
+4. **Dynamic bucket names → Fixed naming**: Predictable S3 bucket names
+5. **Codespaces → EC2 + Session Manager**: Consistent environment, no SSH keys
+
+### Benefits メリット
+
+- **Cost Effective**: ~70% cost reduction vs RDS
+- **Secure**: No access keys, IAM role-based authentication
+- **Automated**: Zero manual configuration required
+- **Consistent**: Same environment for all users
+- **Accessible**: Session Manager access from anywhere

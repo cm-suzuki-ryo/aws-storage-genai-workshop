@@ -1,17 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: IAM User with scoped access to Bedrock, S3, RDS, and CloudFormation + PostgreSQL RDS
+Description: PostgreSQL on EC2 with Ruby environment using Launch Template, fixed S3 bucket naming, GitHub repository cloning, and automatic AWS region configuration
 
 Parameters:
-  UserName:
-    Type: String
-    Default: GenAIStorageUser
-    Description: IAM username to create
-
-  DBInstanceIdentifier:
-    Type: String
-    Default: 'vectordb'
-    Description: 'Unique identifier for the RDS instance'
-  
   DBName:
     Type: String
     Default: 'vectordb'
@@ -27,32 +17,32 @@ Parameters:
     NoEcho: true
     MinLength: 8
     Description: 'Master password for the database (min 8 characters)'
-  
-  DBInstanceClass:
-    Type: String
-    Default: 'db.t3.micro'
-    AllowedValues:
-      - db.t3.micro
-      - db.t3.small
-      - db.t3.medium
-      - db.t3.large
-    Description: 'RDS instance class'
-
-  SubnetIds:
-    Type: CommaDelimitedList
-    Description: 'List of subnet IDs for DB subnet group (must be in different AZs)'
 
 Resources:
   Bucket:
     Type: AWS::S3::Bucket
-
-  GenAIStorageUser:
-    Type: AWS::IAM::User
     Properties:
-      UserName: !Ref UserName
-      ManagedPolicyArns: []
+      BucketName: !Sub 'aws-storage-genai-workshop-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  DatabaseInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
-        - PolicyName: RegionScopedAccess
+        - PolicyName: BedrockAccess
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -65,7 +55,6 @@ Resources:
                 Resource: "*"
                 Condition:
                   StringEquals:
-                    # Due to cross-region endpoint we need all possible requested regions
                     aws:RequestedRegion: 
                       - ap-south-1
                       - ap-northeast-1
@@ -73,40 +62,23 @@ Resources:
                       - ap-northeast-3
                       - ap-southeast-1
                       - ap-southeast-2
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
               - Effect: Allow
                 Action: s3:ListBucket
                 Resource: !GetAtt Bucket.Arn
-                Condition:
-                  StringEquals:
-                    aws:RequestedRegion: ap-northeast-1
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
                 Resource: !Sub "${Bucket.Arn}/*"
-                Condition:
-                  StringEquals:
-                    aws:RequestedRegion: ap-northeast-1
-              - Effect: Allow
-                Action:
-                  - rds:DescribeDBInstances
-                  - rds:Connect
-                  - rds:ModifyDBInstance
-                  - rds:RebootDBInstance
-                  - rds:DeleteDBInstance
-                  - rds:StartDBInstance
-                  - rds:StopDBInstance
-                  - rds:CreateDBSnapshot
-                  - rds:DeleteDBSnapshot
-                  - rds:DescribeDBSnapshots
-                  - rds:DescribeDBParameterGroups
-                  - rds:DescribeDBLogFiles
-                  - rds:DownloadDBLogFilePortion
-                Resource: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DBInstanceIdentifier}"
-                Condition:
-                  StringEquals:
-                    aws:RequestedRegion: ap-northeast-1
+        - PolicyName: CloudFormationAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
               - Effect: Allow
                 Action:
                   - cloudformation:DescribeStacks
@@ -114,93 +86,409 @@ Resources:
                   - cloudformation:GetTemplate
                   - cloudformation:DescribeStackResources
                 Resource: "*"
-                Condition:
-                  StringEquals:
-                    aws:RequestedRegion: ap-northeast-1
+        - PolicyName: EC2Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:StartInstances
+                  - ec2:StopInstances
+                  - ec2:RebootInstances
+                  - ec2:TerminateInstances
+                Resource: !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*"
+      Tags:
+        - Key: Name
+          Value: 'PostgreSQL-EC2-Role'
 
-  AccessKey:
-    Type: AWS::IAM::AccessKey
-    DependsOn: GenAIStorageUser
+  DatabaseInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
     Properties:
-      UserName: !Ref GenAIStorageUser
+      Roles:
+        - !Ref DatabaseInstanceRole
 
-  DatabaseSecurityGroup:
+  PostgreSQLLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-PostgreSQL-LaunchTemplate'
+      LaunchTemplateData:
+        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
+        InstanceType: t3.small
+        IamInstanceProfile:
+          Arn: !GetAtt DatabaseInstanceProfile.Arn
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: 'PostgreSQL-EC2-Instance'
+              - Key: Environment
+                Value: 'Workshop'
+              - Key: Application
+                Value: 'GenAI-Storage'
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            
+            # Enable logging for debugging
+            exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+            echo "Starting UserData execution at $(date)"
+            
+            # Update system
+            echo "Updating system packages..."
+            yum update -y
+            
+            # Install git package
+            echo "Installing git..."
+            dnf install -y git
+            
+            # Get AWS account ID and region from metadata
+            echo "Getting AWS metadata..."
+            ACCOUNT_ID=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | grep accountId | cut -d'"' -f4)
+            REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | grep region | cut -d'"' -f4)
+            BUCKET_NAME="aws-storage-genai-workshop-$ACCOUNT_ID-$REGION"
+            
+            echo "Account ID: $ACCOUNT_ID"
+            echo "Region: $REGION"
+            echo "Bucket Name: $BUCKET_NAME"
+            
+            # Set AWS region environment variables globally
+            echo "Setting AWS region environment variables..."
+            echo "export AWS_DEFAULT_REGION=$REGION" >> /etc/environment
+            echo "export AWS_REGION=$REGION" >> /etc/environment
+            
+            # Set AWS region for root user
+            echo "export AWS_DEFAULT_REGION=$REGION" >> /root/.bashrc
+            echo "export AWS_REGION=$REGION" >> /root/.bashrc
+            
+            # Set AWS region for ec2-user
+            echo "export AWS_DEFAULT_REGION=$REGION" >> /home/ec2-user/.bashrc
+            echo "export AWS_REGION=$REGION" >> /home/ec2-user/.bashrc
+            
+            # Set current session environment variables
+            export AWS_DEFAULT_REGION=$REGION
+            export AWS_REGION=$REGION
+            
+            # Install AWS CLI first
+            echo "Installing AWS CLI..."
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+            cd /tmp && unzip awscliv2.zip && ./aws/install
+            rm -rf awscliv2.zip aws/
+            
+            # Configure AWS CLI for root
+            aws configure set region $REGION
+            aws configure set default.region $REGION
+            
+            # Configure AWS CLI for ec2-user
+            sudo -u ec2-user aws configure set region $REGION
+            sudo -u ec2-user aws configure set default.region $REGION
+            
+            # Test AWS CLI configuration
+            echo "Testing AWS CLI configuration..."
+            aws sts get-caller-identity
+            
+            # Clone GitHub repository to ec2-user home directory
+            echo "Cloning GitHub repository..."
+            cd /home/ec2-user
+            
+            # Remove existing directory if it exists
+            if [ -d "aws-storage-genai-workshop" ]; then
+                echo "Removing existing workshop directory..."
+                rm -rf aws-storage-genai-workshop
+            fi
+            
+            # Clone repository as ec2-user
+            sudo -u ec2-user bash -c 'cd /home/ec2-user && git clone https://github.com/cm-suzuki-ryo/aws-storage-genai-workshop.git'
+            if [ $? -ne 0 ]; then
+                echo "ERROR: Git clone failed"
+                exit 1
+            fi
+            
+            echo "Git clone successful"
+            ls -la /home/ec2-user/aws-storage-genai-workshop/
+            
+            cd /home/ec2-user/aws-storage-genai-workshop
+            
+            # Install PostgreSQL 15
+            echo "Installing PostgreSQL..."
+            dnf install -y postgresql15-server postgresql15-contrib postgresql15-devel
+            
+            # Initialize PostgreSQL
+            postgresql-setup --initdb
+            
+            # Start and enable PostgreSQL
+            systemctl start postgresql
+            systemctl enable postgresql
+            
+            # Configure PostgreSQL
+            sudo -u postgres psql -c "ALTER USER postgres PASSWORD '${MasterUserPassword}';"
+            sudo -u postgres createdb ${DBName}
+            
+            # Install pgvector extension
+            echo "Installing pgvector..."
+            dnf install -y gcc make
+            sudo -u postgres git clone https://github.com/pgvector/pgvector.git /tmp/pgvector
+            cd /tmp/pgvector
+            make
+            make install
+            
+            # Enable pgvector extension
+            sudo -u postgres psql -d ${DBName} -c "CREATE EXTENSION vector;"
+            
+            # Configure PostgreSQL for external connections
+            sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" /var/lib/pgsql/data/postgresql.conf
+            echo "host all all 0.0.0.0/0 md5" >> /var/lib/pgsql/data/pg_hba.conf
+            
+            # Restart PostgreSQL to apply configuration changes
+            systemctl restart postgresql
+            
+            # Install Ruby and development tools
+            echo "Installing Ruby environment..."
+            dnf groupinstall -y "Development Tools"
+            dnf install -y ruby ruby-devel rubygems
+            
+            # Install bundler
+            gem install bundler
+            
+            # Go back to workshop directory
+            cd /home/ec2-user/aws-storage-genai-workshop
+            
+            # Update .env file with correct values (overwrite the existing one from repository)
+            echo "Creating .env file..."
+            cat > .env << EOF
+            STACK_NAME=${AWS::StackName}
+            AWS_REGION=$REGION
+            AWS_BUCKET_NAME=$BUCKET_NAME
+            DATABASE_URL=postgresql://${MasterUsername}:${MasterUserPassword}@localhost:5432/${DBName}
+            AWS_FILE_KEY=images.zip
+            IMAGE_IDEA_1="The image shows the eaves of a building with visible cracks, spalling, and missing components. The surface appears deteriorated, with signs of water damage and discoloration. The eaves are part of the building's exterior, and the defects are concentrated along the edge where the roof meets the wall."
+            IMAGE_IDEA_2="The image shows a section of a building's roof with visible cracks and spalling, particularly at the edges. There is also some debris accumulation along the edge of the roof."
+            IMAGE_IDEA_3="The image shows an aerial view of a building's rooftop. The roof appears to be made of concrete with visible cracks and surface deterioration. There is noticeable corrosion on the metal components, particularly around the edges and joints. The surface of the roof shows signs of discoloration and wear, indicating exposure to weather elements. Additionally, there are some metal pipes and structural elements visible, some of which show signs of rust and corrosion."
+            IMAGE_IDEA_4="The image shows a concrete road surface with multiple cracks, some of which are filled with water. The cracks vary in width and depth, with some being more pronounced than others. There are also signs of surface deterioration around the cracks, indicating potential wear and tear."
+            IMAGE_IDEA_5="The image shows a concrete floor with multiple intersecting cracks. The cracks appear to be relatively deep and widespread, indicating significant structural stress or settlement. The surface of the concrete shows signs of wear and minor spalling around the crack areas."
+            EOF
+            
+            # Install Ruby gems using existing Gemfile from repository
+            echo "Installing Ruby gems..."
+            bundle install
+            if [ $? -ne 0 ]; then
+                echo "ERROR: Bundle install failed"
+                exit 1
+            fi
+            
+            # Update bin/execute script to use local database connection
+            echo "Updating bin/execute script..."
+            cat > bin/execute << 'EOF'
+            #!/bin/bash
+            
+            set -a
+            source ./.env
+            set +a
+            
+            # Use local database connection
+            CONNECTION_STRING="$DATABASE_URL"
+            
+            if [ -z "$CONNECTION_STRING" ]; then
+                echo "Error: DATABASE_URL not set in .env file"
+                exit 1
+            fi
+            
+            # Check if SQL file argument provided
+            if [ $# -eq 1 ]; then
+                SQL_FILE=$1
+                if [ ! -f "$SQL_FILE" ]; then
+                    echo "Error: SQL file '$SQL_FILE' not found"
+                    exit 1
+                fi
+                echo "Executing SQL file: $SQL_FILE"
+                psql "$CONNECTION_STRING" -f "$SQL_FILE"
+            else
+                echo "Connecting interactively..."
+                echo "Connection string: $CONNECTION_STRING"
+                psql "$CONNECTION_STRING"
+            fi
+            EOF
+            
+            # Update bin/connect script to use local database connection
+            echo "Updating bin/connect script..."
+            cat > bin/connect << 'EOF'
+            #!/bin/bash
+            
+            set -a
+            source ./.env
+            set +a
+            
+            # Use local database connection
+            CONNECTION_STRING="$DATABASE_URL"
+            
+            if [ -z "$CONNECTION_STRING" ]; then
+                echo "Error: DATABASE_URL not set in .env file"
+                exit 1
+            fi
+            
+            echo "Connecting with: $CONNECTION_STRING"
+            psql "$CONNECTION_STRING"
+            EOF
+            
+            # Make scripts executable
+            chmod +x bin/execute bin/connect
+            
+            # Change ownership to ec2-user for all files in the workshop directory
+            chown -R ec2-user:ec2-user /home/ec2-user/aws-storage-genai-workshop
+            
+            # Create a simple health check script
+            cat > /home/ec2-user/db_status.sh << 'EOF'
+            #!/bin/bash
+            sudo -u postgres psql -d ${DBName} -c "SELECT version();"
+            EOF
+            chmod +x /home/ec2-user/db_status.sh
+            chown ec2-user:ec2-user /home/ec2-user/db_status.sh
+            
+            # Create AWS configuration test script
+            cat > /home/ec2-user/test_aws_config.sh << 'EOF'
+            #!/bin/bash
+            echo "=== AWS Configuration Test ==="
+            echo "AWS_REGION: $AWS_REGION"
+            echo "AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION"
+            echo ""
+            echo "AWS CLI Configuration:"
+            aws configure list
+            echo ""
+            echo "AWS Identity:"
+            aws sts get-caller-identity
+            echo ""
+            echo "S3 Buckets:"
+            aws s3 ls
+            EOF
+            chmod +x /home/ec2-user/test_aws_config.sh
+            chown ec2-user:ec2-user /home/ec2-user/test_aws_config.sh
+            
+            # Create setup completion marker with all relevant info
+            cat > /home/ec2-user/setup_complete.txt << EOF
+            Setup completed at $(date)
+            S3 Bucket Name: $BUCKET_NAME
+            Account ID: $ACCOUNT_ID
+            Region: $REGION
+            GitHub Repository: https://github.com/cm-suzuki-ryo/aws-storage-genai-workshop
+            Workshop Directory: /home/ec2-user/aws-storage-genai-workshop
+            Database: PostgreSQL with pgvector extension
+            Ruby Environment: Installed with bundler and gems
+            AWS Region Configuration: Completed
+            Git Clone Status: SUCCESS
+            Launch Template: ${AWS::StackName}-PostgreSQL-LaunchTemplate
+            
+            Environment Variables Set:
+            - AWS_REGION=$REGION
+            - AWS_DEFAULT_REGION=$REGION
+            
+            Test Commands:
+            - ./test_aws_config.sh (AWS configuration test)
+            - ./db_status.sh (Database status check)
+            EOF
+            chown ec2-user:ec2-user /home/ec2-user/setup_complete.txt
+            
+            echo "UserData execution completed successfully at $(date)"
+
+  PostgreSQLSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for PostgreSQL RDS instance with public access'
+      GroupDescription: 'Security group for PostgreSQL EC2 instance'
       SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: 'SSH access (for troubleshooting)'
         - IpProtocol: tcp
           FromPort: 5432
           ToPort: 5432
           CidrIp: 0.0.0.0/0
-          Description: 'Allow PostgreSQL access from anywhere'
+          Description: 'PostgreSQL access'
       Tags:
         - Key: Name
-          Value: 'PostgreSQL-Public-Access-SG'
-
-  DatabaseSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupName: !Sub "${AWS::StackName}-db-subnet-group"
-      DBSubnetGroupDescription: 'DB Subnet Group for PostgreSQL RDS instance'
-      SubnetIds: !Ref SubnetIds
-      Tags:
-        - Key: Name
-          Value: 'PostgreSQL-DB-Subnet-Group'
+          Value: 'PostgreSQL-EC2-SecurityGroup'
 
   DatabaseInstance:
-    Type: AWS::RDS::DBInstance
+    Type: AWS::EC2::Instance
     Properties:
-      DBInstanceIdentifier: !Ref DBInstanceIdentifier
-      DBName: !Ref DBName
-      Engine: postgres
-      EngineVersion: '17.2'
-      DBInstanceClass: !Ref DBInstanceClass
-      AllocatedStorage: 20
-      StorageType: gp2
-      MasterUsername: !Ref MasterUsername
-      MasterUserPassword: !Ref MasterUserPassword
-      PubliclyAccessible: true
-      BackupRetentionPeriod: 0
-      MultiAZ: false
-      StorageEncrypted: true
-      DeletionProtection: false
-      VPCSecurityGroups:
-        - !GetAtt DatabaseSecurityGroup.GroupId
-      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      LaunchTemplate:
+        LaunchTemplateId: !Ref PostgreSQLLaunchTemplate
+        Version: !GetAtt PostgreSQLLaunchTemplate.LatestVersionNumber
+      SecurityGroupIds:
+        - !Ref PostgreSQLSecurityGroup
       Tags:
         - Key: Name
-          Value: 'PostgreSQL with pgvector'
+          Value: 'PostgreSQL-EC2-Instance'
+        - Key: CreatedBy
+          Value: 'CloudFormation'
+        - Key: Stack
+          Value: !Ref AWS::StackName
 
 Outputs:
-  AccessKeyId:
-    Value: !Ref AccessKey
-    Description: The access key ID for the user
-
-  SecretAccessKey:
-    Value: !GetAtt AccessKey.SecretAccessKey
-    Description: The secret access key for the user
-
   BucketName:
     Value: !Ref Bucket
-    Description: The unique S3 bucket name generated by CloudFormation
+    Description: The S3 bucket name with fixed naming convention
+
+  BucketNamePattern:
+    Value: !Sub 'aws-storage-genai-workshop-${AWS::AccountId}-${AWS::Region}'
+    Description: The S3 bucket naming pattern used
+
+  LaunchTemplateId:
+    Value: !Ref PostgreSQLLaunchTemplate
+    Description: Launch Template ID for PostgreSQL EC2 instance
+
+  LaunchTemplateName:
+    Value: !Sub '${AWS::StackName}-PostgreSQL-LaunchTemplate'
+    Description: Launch Template name
 
   DatabaseEndpoint:
-    Description: 'RDS PostgreSQL endpoint'
-    Value: !GetAtt DatabaseInstance.Endpoint.Address
+    Description: 'EC2 PostgreSQL endpoint (Private IP)'
+    Value: !GetAtt DatabaseInstance.PrivateIp
+
+  DatabasePublicEndpoint:
+    Description: 'EC2 PostgreSQL endpoint (Public IP)'
+    Value: !GetAtt DatabaseInstance.PublicIp
 
   DatabasePort:
-    Description: 'RDS PostgreSQL port'
-    Value: !GetAtt DatabaseInstance.Endpoint.Port
+    Description: 'PostgreSQL port'
+    Value: '5432'
 
   DatabaseName:
     Description: 'Database name'
     Value: !Ref DBName
 
   ConnectionString:
-    Description: 'Connection string for the database'
-    Value: !Sub 'postgresql://${MasterUsername}:${MasterUserPassword}@${DatabaseInstance.Endpoint.Address}:${DatabaseInstance.Endpoint.Port}/${DBName}'
+    Description: 'Connection string for the database (localhost for EC2 internal use)'
+    Value: !Sub 'postgresql://${MasterUsername}:${MasterUserPassword}@localhost:5432/${DBName}'
+
+  InstanceId:
+    Description: 'EC2 Instance ID'
+    Value: !Ref DatabaseInstance
+
+  SSMSessionCommand:
+    Description: 'Command to connect via Session Manager'
+    Value: !Sub 'aws ssm start-session --target ${DatabaseInstance} --region ${AWS::Region}'
+
+  WorkshopDirectory:
+    Description: 'Workshop directory on EC2 instance'
+    Value: '/home/ec2-user/aws-storage-genai-workshop'
+
+  GitHubRepository:
+    Description: 'Cloned GitHub repository URL'
+    Value: 'https://github.com/cm-suzuki-ryo/aws-storage-genai-workshop'
+
+  UserDataLogCommand:
+    Description: 'Command to check UserData execution log'
+    Value: 'sudo cat /var/log/user-data.log'
+
+  AWSConfigTestCommand:
+    Description: 'Command to test AWS configuration'
+    Value: '/home/ec2-user/test_aws_config.sh'
 
   SecurityGroupId:
-    Description: 'Security Group ID for the RDS instance'
-    Value: !Ref DatabaseSecurityGroup
+    Description: 'Security Group ID for the PostgreSQL EC2 instance'
+    Value: !Ref PostgreSQLSecurityGroup
+
+  IAMRoleArn:
+    Description: 'IAM Role ARN attached to EC2 instance'
+    Value: !GetAtt DatabaseInstanceRole.Arn
